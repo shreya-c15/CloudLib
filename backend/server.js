@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET =
   process.env.JWT_SECRET || "cloudlib_secret_key_change_this";
 
-
 // ============================================================
 // MIDDLEWARE
 // ============================================================
@@ -26,6 +25,13 @@ app.use(
 
 app.use(express.json());
 
+// Request logger
+app.use((req, res, next) => {
+  console.log(
+    `[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`
+  );
+  next();
+});
 
 // ============================================================
 // DATABASE
@@ -38,7 +44,6 @@ const pool = new Pool({
     rejectUnauthorized: false,
   },
 });
-
 
 // ============================================================
 // DATABASE TEST
@@ -62,7 +67,6 @@ async function testDatabaseConnection() {
     );
   }
 }
-
 
 // ============================================================
 // AUTHENTICATION MIDDLEWARE
@@ -100,12 +104,16 @@ function authenticateToken(req, res, next) {
 
     next();
   } catch (error) {
+    console.error(
+      "JWT verification error:",
+      error.message
+    );
+
     return res.status(401).json({
       message: "Invalid or expired token",
     });
   }
 }
-
 
 // ============================================================
 // ROOT
@@ -116,7 +124,6 @@ app.get("/", (req, res) => {
     message: "CloudLib API is running!",
   });
 });
-
 
 // ============================================================
 // AUTH - REGISTER
@@ -216,7 +223,6 @@ app.post(
   }
 );
 
-
 // ============================================================
 // AUTH - LOGIN
 // ============================================================
@@ -313,7 +319,6 @@ app.post(
   }
 );
 
-
 // ============================================================
 // AUTH - CURRENT USER
 // ============================================================
@@ -361,7 +366,6 @@ app.get(
     }
   }
 );
-
 
 // ============================================================
 // BOOKS - GET ALL
@@ -415,7 +419,6 @@ app.get(
   }
 );
 
-
 // ============================================================
 // BOOKS - GET ONE
 // ============================================================
@@ -463,7 +466,6 @@ app.get(
     }
   }
 );
-
 
 // ============================================================
 // BOOKS - CREATE
@@ -551,7 +553,7 @@ app.post(
         const existing =
           await pool.query(
             `
-            SELECT *
+            SELECT id
             FROM books
             WHERE isbn = $1
             `,
@@ -624,7 +626,6 @@ app.post(
     }
   }
 );
-
 
 // ============================================================
 // BOOKS - UPDATE
@@ -831,7 +832,6 @@ app.put(
   }
 );
 
-
 // ============================================================
 // BOOKS - DELETE
 // ============================================================
@@ -843,10 +843,13 @@ app.delete(
     const client =
       await pool.connect();
 
+    let transactionStarted = false;
+
     try {
       const { id } = req.params;
 
       await client.query("BEGIN");
+      transactionStarted = true;
 
       const result =
         await client.query(
@@ -861,6 +864,7 @@ app.delete(
 
       if (result.rows.length === 0) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(404).json({
           message:
@@ -877,6 +881,7 @@ app.delete(
           Number(req.user.id)
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(403).json({
           message:
@@ -901,6 +906,7 @@ app.delete(
         ) > 0
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(400).json({
           message:
@@ -917,13 +923,23 @@ app.delete(
       );
 
       await client.query("COMMIT");
+      transactionStarted = false;
 
       res.json({
         message:
           "Book deleted successfully",
       });
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (transactionStarted) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackError) {
+          console.error(
+            "Rollback error:",
+            rollbackError.message
+          );
+        }
+      }
 
       console.error(
         "Delete book error:",
@@ -939,7 +955,6 @@ app.delete(
     }
   }
 );
-
 
 // ============================================================
 // BOOK REQUESTS - CREATE
@@ -1030,13 +1045,11 @@ app.post(
         });
       }
 
-      // --------------------------------------------------------
-      // Buy request
-      // --------------------------------------------------------
-
       let price = null;
 
-      if (request_type === "buy") {
+      if (
+        request_type === "buy"
+      ) {
         if (
           !book.sale_price ||
           Number(book.sale_price) <= 0
@@ -1053,17 +1066,13 @@ app.post(
             ? Number(book.sale_price)
             : Number(offered_price);
 
-        if (price < 0) {
+        if (price <= 0) {
           return res.status(400).json({
             message:
-              "Offered price cannot be negative",
+              "Offered price must be greater than zero",
           });
         }
       }
-
-      // --------------------------------------------------------
-      // Prevent duplicate pending requests
-      // --------------------------------------------------------
 
       const duplicate =
         await pool.query(
@@ -1148,7 +1157,6 @@ app.post(
   }
 );
 
-
 // ============================================================
 // REQUESTS - MY REQUESTS
 // ============================================================
@@ -1194,7 +1202,8 @@ app.get(
         );
 
       res.json({
-        requests: result.rows,
+        requests:
+          result.rows,
       });
     } catch (error) {
       console.error(
@@ -1209,7 +1218,6 @@ app.get(
     }
   }
 );
-
 
 // ============================================================
 // REQUESTS - INCOMING
@@ -1256,7 +1264,8 @@ app.get(
         );
 
       res.json({
-        requests: result.rows,
+        requests:
+          result.rows,
       });
     } catch (error) {
       console.error(
@@ -1272,7 +1281,6 @@ app.get(
   }
 );
 
-
 // ============================================================
 // REQUESTS - GLOBAL COMMUNITY
 // ============================================================
@@ -1282,11 +1290,6 @@ app.get(
   authenticateToken,
   async (req, res) => {
     try {
-
-      // --------------------------------------------------------
-      // All borrow / buy requests
-      // --------------------------------------------------------
-
       const requestsResult =
         await pool.query(
           `
@@ -1331,11 +1334,6 @@ app.get(
           `
         );
 
-
-      // --------------------------------------------------------
-      // Books currently listed for sale
-      // --------------------------------------------------------
-
       const salesResult =
         await pool.query(
           `
@@ -1374,7 +1372,6 @@ app.get(
         sales:
           salesResult.rows,
       });
-
     } catch (error) {
       console.error(
         "Community error:",
@@ -1388,7 +1385,6 @@ app.get(
     }
   }
 );
-
 
 // ============================================================
 // REQUESTS - EDIT PENDING REQUEST
@@ -1437,7 +1433,9 @@ app.put(
         });
       }
 
-      if (request.status !== "pending") {
+      if (
+        request.status !== "pending"
+      ) {
         return res.status(400).json({
           message:
             "Only pending requests can be edited",
@@ -1559,7 +1557,6 @@ app.put(
         request:
           result.rows[0],
       });
-
     } catch (error) {
       console.error(
         "Edit request error:",
@@ -1573,7 +1570,6 @@ app.put(
     }
   }
 );
-
 
 // ============================================================
 // REQUESTS - CANCEL
@@ -1637,7 +1633,6 @@ app.delete(
         message:
           "Request cancelled successfully",
       });
-
     } catch (error) {
       console.error(
         "Cancel request error:",
@@ -1652,7 +1647,6 @@ app.delete(
   }
 );
 
-
 // ============================================================
 // REQUESTS - ACCEPT
 // ============================================================
@@ -1664,6 +1658,8 @@ app.put(
     const client =
       await pool.connect();
 
+    let transactionStarted = false;
+
     try {
       const { id } = req.params;
 
@@ -1672,10 +1668,7 @@ app.put(
       } = req.body;
 
       await client.query("BEGIN");
-
-      // --------------------------------------------------------
-      // Lock request and book
-      // --------------------------------------------------------
+      transactionStarted = true;
 
       const requestResult =
         await client.query(
@@ -1701,10 +1694,9 @@ app.put(
           [id]
         );
 
-      if (
-        requestResult.rows.length === 0
-      ) {
+      if (requestResult.rows.length === 0) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(404).json({
           message:
@@ -1715,16 +1707,13 @@ app.put(
       const request =
         requestResult.rows[0];
 
-      // --------------------------------------------------------
-      // Only owner can accept
-      // --------------------------------------------------------
-
       if (
         !request.owner_id ||
         Number(request.owner_id) !==
           Number(req.user.id)
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(403).json({
           message:
@@ -1732,14 +1721,11 @@ app.put(
         });
       }
 
-      // --------------------------------------------------------
-      // Request must be pending
-      // --------------------------------------------------------
-
       if (
         request.status !== "pending"
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(400).json({
           message:
@@ -1747,16 +1733,12 @@ app.put(
         });
       }
 
-      // --------------------------------------------------------
-      // Borrow request
-      // --------------------------------------------------------
-
       if (
         request.request_type === "borrow"
       ) {
-
         if (!due_date) {
           await client.query("ROLLBACK");
+          transactionStarted = false;
 
           return res.status(400).json({
             message:
@@ -1785,6 +1767,7 @@ app.put(
           )
         ) {
           await client.query("ROLLBACK");
+          transactionStarted = false;
 
           return res.status(400).json({
             message:
@@ -1796,6 +1779,7 @@ app.put(
           selectedDate <= today
         ) {
           await client.query("ROLLBACK");
+          transactionStarted = false;
 
           return res.status(400).json({
             message:
@@ -1804,15 +1788,12 @@ app.put(
         }
       }
 
-      // --------------------------------------------------------
-      // Check available quantity
-      // --------------------------------------------------------
-
       if (
         Number(request.available_quantity) <
         Number(request.quantity)
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(400).json({
           message:
@@ -1827,7 +1808,6 @@ app.put(
       if (
         request.request_type === "borrow"
       ) {
-
         await client.query(
           `
           UPDATE book_requests
@@ -1843,7 +1823,6 @@ app.put(
           ]
         );
 
-        // One borrowing record per copy
         for (
           let i = 0;
           i < Number(request.quantity);
@@ -1878,7 +1857,6 @@ app.put(
           );
         }
 
-        // Reduce available quantity
         await client.query(
           `
           UPDATE books
@@ -1894,6 +1872,7 @@ app.put(
         );
 
         await client.query("COMMIT");
+        transactionStarted = false;
 
         return res.json({
           message:
@@ -1914,7 +1893,6 @@ app.put(
       if (
         request.request_type === "buy"
       ) {
-
         const salePrice =
           Number(
             request.offered_price ||
@@ -1926,6 +1904,7 @@ app.put(
           salePrice <= 0
         ) {
           await client.query("ROLLBACK");
+          transactionStarted = false;
 
           return res.status(400).json({
             message:
@@ -1933,7 +1912,6 @@ app.put(
           });
         }
 
-        // Create sale record
         await client.query(
           `
           INSERT INTO sales (
@@ -1963,7 +1941,6 @@ app.put(
           ]
         );
 
-        // Reduce stock
         await client.query(
           `
           UPDATE books
@@ -1988,7 +1965,6 @@ app.put(
           ]
         );
 
-        // Mark request accepted
         await client.query(
           `
           UPDATE book_requests
@@ -2002,6 +1978,7 @@ app.put(
         );
 
         await client.query("COMMIT");
+        transactionStarted = false;
 
         return res.json({
           message:
@@ -2016,14 +1993,23 @@ app.put(
       }
 
       await client.query("ROLLBACK");
+      transactionStarted = false;
 
       return res.status(400).json({
         message:
           "Unsupported request type",
       });
-
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (transactionStarted) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackError) {
+          console.error(
+            "Accept rollback error:",
+            rollbackError.message
+          );
+        }
+      }
 
       console.error(
         "Accept request error:",
@@ -2039,7 +2025,6 @@ app.put(
     }
   }
 );
-
 
 // ============================================================
 // REQUESTS - DECLINE
@@ -2116,7 +2101,6 @@ app.put(
         request:
           updated.rows[0],
       });
-
     } catch (error) {
       console.error(
         "Decline request error:",
@@ -2130,7 +2114,6 @@ app.put(
     }
   }
 );
-
 
 // ============================================================
 // BORROWINGS - GET MY BORROWINGS
@@ -2184,7 +2167,6 @@ app.get(
         borrowings:
           result.rows,
       });
-
     } catch (error) {
       console.error(
         "Get borrowings error:",
@@ -2199,9 +2181,8 @@ app.get(
   }
 );
 
-
 // ============================================================
-// BORROWINGS - GET ALL ACTIVE BORROWINGS FOR OWNER
+// BORROWINGS - OWNER BORROWINGS
 // ============================================================
 
 app.get(
@@ -2255,7 +2236,6 @@ app.get(
         borrowings:
           result.rows,
       });
-
     } catch (error) {
       console.error(
         "Owner borrowings error:",
@@ -2270,7 +2250,6 @@ app.get(
   }
 );
 
-
 // ============================================================
 // BORROWINGS - RETURN BOOK
 // ============================================================
@@ -2282,26 +2261,53 @@ app.put(
     const client =
       await pool.connect();
 
+    let transactionStarted = false;
+
     try {
       const { id } = req.params;
 
+      console.log(
+        "RETURN REQUEST STARTED",
+        {
+          borrowingId: id,
+          userId: req.user.id,
+        }
+      );
+
       await client.query("BEGIN");
+      transactionStarted = true;
+
+      // --------------------------------------------------------
+      // Find and lock borrowing
+      // --------------------------------------------------------
 
       const borrowingResult =
         await client.query(
           `
-          SELECT *
-          FROM borrowings
-          WHERE id = $1
-          FOR UPDATE
+          SELECT
+            b.*,
+            books.title AS book_title,
+            books.quantity AS book_quantity,
+            books.available_quantity AS book_available_quantity
+          FROM borrowings b
+          INNER JOIN books
+            ON books.id = b.book_id
+          WHERE b.id = $1
+          FOR UPDATE OF b, books
           `,
           [id]
         );
+
+      console.log(
+        "RETURN BORROWING RESULT:",
+        borrowingResult.rows
+      );
 
       if (
         borrowingResult.rows.length === 0
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(404).json({
           message:
@@ -2312,12 +2318,16 @@ app.put(
       const borrowing =
         borrowingResult.rows[0];
 
+      // --------------------------------------------------------
       // Only borrower can return
+      // --------------------------------------------------------
+
       if (
         Number(borrowing.user_id) !==
         Number(req.user.id)
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(403).json({
           message:
@@ -2325,10 +2335,15 @@ app.put(
         });
       }
 
+      // --------------------------------------------------------
+      // Already returned
+      // --------------------------------------------------------
+
       if (
         borrowing.status === "returned"
       ) {
         await client.query("ROLLBACK");
+        transactionStarted = false;
 
         return res.status(400).json({
           message:
@@ -2336,89 +2351,137 @@ app.put(
         });
       }
 
-      // Mark borrowing returned
-      await client.query(
-        `
-        UPDATE borrowings
-        SET
-          status = 'returned',
-          return_date = CURRENT_DATE
-        WHERE id = $1
-        `,
-        [id]
+      // --------------------------------------------------------
+      // Return borrowing
+      // --------------------------------------------------------
+
+      const returnedResult =
+        await client.query(
+          `
+          UPDATE borrowings
+          SET
+            status = 'returned',
+            return_date = CURRENT_DATE
+          WHERE id = $1
+          RETURNING *
+          `,
+          [id]
+        );
+
+      console.log(
+        "BORROWING RETURNED:",
+        returnedResult.rows
       );
 
-      // Increase available copies
-      await client.query(
-        `
-        UPDATE books
-        SET
-          available_quantity =
-            LEAST(
-              quantity,
-              available_quantity + 1
-            )
-        WHERE id = $1
-        `,
-        [borrowing.book_id]
+      // --------------------------------------------------------
+      // Increase available quantity
+      // --------------------------------------------------------
+
+      const bookUpdateResult =
+        await client.query(
+          `
+          UPDATE books
+          SET
+            available_quantity =
+              LEAST(
+                quantity,
+                available_quantity + 1
+              )
+          WHERE id = $1
+          RETURNING
+            id,
+            title,
+            quantity,
+            available_quantity
+          `,
+          [borrowing.book_id]
+        );
+
+      console.log(
+        "BOOK STOCK UPDATED:",
+        bookUpdateResult.rows
       );
 
-      // If all copies for the request are returned,
-      // mark the request as returned
-      await client.query(
-        `
-        UPDATE book_requests br
-        SET
-          status = 'returned',
-          updated_at = CURRENT_TIMESTAMP
-        WHERE
-          br.requester_id = $1
-          AND br.book_id = $2
-          AND br.request_type = 'borrow'
-          AND br.status = 'accepted'
-          AND br.due_date = $3
-          AND NOT EXISTS (
-            SELECT 1
-            FROM borrowings b
-            WHERE
-              b.user_id = br.requester_id
-              AND b.book_id = br.book_id
-              AND b.due_date = br.due_date
-              AND b.status = 'borrowed'
-          )
-        `,
-        [
-          borrowing.user_id,
-          borrowing.book_id,
-          borrowing.due_date,
-        ]
-      );
+      if (
+        bookUpdateResult.rows.length === 0
+      ) {
+        throw new Error(
+          "Book associated with borrowing record was not found"
+        );
+      }
+
+      // --------------------------------------------------------
+      // IMPORTANT:
+      //
+      // DO NOT update book_requests.status to 'returned'.
+      //
+      // Your database check constraint does not allow
+      // 'returned' as a value for book_requests.status.
+      //
+      // The borrowing record itself already stores:
+      // status = 'returned'
+      //
+      // Therefore the accepted request is left as
+      // 'accepted', while the actual borrowing record
+      // correctly becomes 'returned'.
+      // --------------------------------------------------------
 
       await client.query("COMMIT");
+      transactionStarted = false;
 
-      res.json({
+      console.log(
+        "RETURN REQUEST COMPLETED SUCCESSFULLY"
+      );
+
+      return res.json({
         message:
           "Book returned successfully",
       });
-
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (transactionStarted) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackError) {
+          console.error(
+            "RETURN ROLLBACK ERROR:",
+            rollbackError.message
+          );
+        }
+      }
 
       console.error(
-        "Return book error:",
+        "RETURN BOOK ERROR:",
         error
       );
 
-      res.status(500).json({
+      console.error(
+        "RETURN BOOK ERROR MESSAGE:",
+        error.message
+      );
+
+      console.error(
+        "RETURN BOOK ERROR CODE:",
+        error.code
+      );
+
+      console.error(
+        "RETURN BOOK ERROR DETAIL:",
+        error.detail
+      );
+
+      return res.status(500).json({
         message:
           "Failed to return book",
+        error:
+          process.env.NODE_ENV === "production"
+            ? undefined
+            : error.message,
       });
     } finally {
       client.release();
     }
   }
 );
-
 
 // ============================================================
 // SALES - MY SALES
@@ -2463,7 +2526,6 @@ app.get(
         sales:
           result.rows,
       });
-
     } catch (error) {
       console.error(
         "Sales error:",
@@ -2477,7 +2539,6 @@ app.get(
     }
   }
 );
-
 
 // ============================================================
 // SALES - MY PURCHASES
@@ -2519,7 +2580,6 @@ app.get(
         purchases:
           result.rows,
       });
-
     } catch (error) {
       console.error(
         "Purchases error:",
@@ -2534,7 +2594,6 @@ app.get(
   }
 );
 
-
 // ============================================================
 // DASHBOARD STATS
 // ============================================================
@@ -2544,11 +2603,6 @@ app.get(
   authenticateToken,
   async (req, res) => {
     try {
-
-      // --------------------------------------------------------
-      // Total books
-      // --------------------------------------------------------
-
       const totalBooks =
         await pool.query(
           `
@@ -2556,10 +2610,6 @@ app.get(
           FROM books
           `
         );
-
-      // --------------------------------------------------------
-      // Total copies
-      // --------------------------------------------------------
 
       const totalCopies =
         await pool.query(
@@ -2573,10 +2623,6 @@ app.get(
           `
         );
 
-      // --------------------------------------------------------
-      // Available copies
-      // --------------------------------------------------------
-
       const availableCopies =
         await pool.query(
           `
@@ -2589,10 +2635,6 @@ app.get(
           `
         );
 
-      // --------------------------------------------------------
-      // My borrowed copies
-      // --------------------------------------------------------
-
       const myBorrowed =
         await pool.query(
           `
@@ -2604,10 +2646,6 @@ app.get(
           [req.user.id]
         );
 
-      // --------------------------------------------------------
-      // My pending requests
-      // --------------------------------------------------------
-
       const myRequests =
         await pool.query(
           `
@@ -2618,10 +2656,6 @@ app.get(
           `,
           [req.user.id]
         );
-
-      // --------------------------------------------------------
-      // Incoming requests
-      // --------------------------------------------------------
 
       const incomingRequests =
         await pool.query(
@@ -2638,10 +2672,6 @@ app.get(
           `,
           [req.user.id]
         );
-
-      // --------------------------------------------------------
-      // My books
-      // --------------------------------------------------------
 
       const myBooks =
         await pool.query(
@@ -2689,7 +2719,6 @@ app.get(
             myBooks.rows[0].count
           ),
       });
-
     } catch (error) {
       console.error(
         "Dashboard stats error:",
@@ -2704,20 +2733,24 @@ app.get(
   }
 );
 
-
 // ============================================================
 // 404
 // ============================================================
 
 app.use(
   (req, res) => {
+    console.log(
+      "404 API ENDPOINT:",
+      req.method,
+      req.originalUrl
+    );
+
     res.status(404).json({
       message:
         "API endpoint not found",
     });
   }
 );
-
 
 // ============================================================
 // ERROR HANDLER
@@ -2736,7 +2769,6 @@ app.use(
     });
   }
 );
-
 
 // ============================================================
 // START SERVER
