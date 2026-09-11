@@ -22,12 +22,6 @@ https://cloudlib-backend.onrender.com
 
 ---
 
-## GitHub Repository
-
-https://github.com/shreya-c15/CloudLib
-
----
-
 # Overview
 
 Traditional library systems mainly focus on maintaining book records and borrowing information. Students may also need a way to discover books owned by other students, request books for borrowing, and buy or sell books.
