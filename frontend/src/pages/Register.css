@@ -1,0 +1,237 @@
+.register-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #f5f6fa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  box-sizing: border-box;
+}
+
+.register-container {
+  width: 100%;
+  max-width: 520px;
+}
+
+.register-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.register-brand-mark {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    #7657f6,
+    #6246e5
+  );
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(108, 78, 232, 0.22);
+}
+
+.register-brand h1 {
+  margin: 0;
+  color: #18233d;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+}
+
+.register-brand p {
+  margin: 9px 0 0;
+  color: #68718a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.register-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e4e6ee;
+  border-radius: 24px;
+  padding: 40px;
+  box-sizing: border-box;
+  box-shadow:
+    0 12px 35px rgba(30, 35, 60, 0.07),
+    0 2px 8px rgba(30, 35, 60, 0.03);
+}
+
+.register-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.register-header h2 {
+  margin: 0;
+  color: #18233d;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+
+.register-header p {
+  margin: 9px 0 0;
+  color: #68718a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+
+.register-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.register-form-group label {
+  color: #26324d;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.register-form-group input {
+  width: 100%;
+  height: 48px;
+  padding: 0 15px;
+  border: 1px solid #d9ddea;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #18233d;
+  font-family: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.register-form-group input::placeholder {
+  color: #a2a9bb;
+}
+
+.register-form-group input:hover {
+  border-color: #c5c9d8;
+}
+
+.register-form-group input:focus {
+  border-color: #7657f6;
+  box-shadow:
+    0 0 0 3px rgba(118, 87, 246, 0.12);
+}
+
+.register-error {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff1f1;
+  border: 1px solid #ffd4d4;
+  color: #c0392b;
+  font-size: 14px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.register-button {
+  width: 100%;
+  height: 50px;
+  margin-top: 3px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 12px;
+  background: #6c4ee8;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.register-button:hover {
+  background: #5b3fd3;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(108, 78, 232, 0.2);
+}
+
+.register-button:active {
+  transform: translateY(0);
+}
+
+.register-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.register-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 24px;
+  color: #68718a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.register-footer a {
+  color: #6c4ee8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.register-footer a:hover {
+  text-decoration: underline;
+}
+
+.register-bottom {
+  text-align: center;
+  margin-top: 20px;
+  color: #9aa1b3;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .register-page {
+    padding: 25px 14px;
+  }
+
+  .register-card {
+    padding: 28px 22px;
+    border-radius: 20px;
+  }
+
+  .register-brand h1 {
+    font-size: 32px;
+  }
+
+  .register-header h2 {
+    font-size: 24px;
+  }
+
+  .register-footer {
+    flex-wrap: wrap;
+  }
+}
